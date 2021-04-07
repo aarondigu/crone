@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<launch>
+
+<!-- corre la realsense, tf_broadcaster, tf_listener, map_nav -->
+    
+
+    <!-- Realsense launch -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+        <arg name="filters" value="pointcloud,decimation"/>
+        <arg name="allow_no_texture_points" value="true"/> 
+        <arg name="clip_distance" value="5.0"/> 
+
+    </include>
+
+    
+    <arg name="tf_broadcaster_delay" default="8.0" /> 
+    <arg name="tf_listener_delay" default="10.0" />  
+    <arg name="map_nav_delay" default="15.0" />  
+    
+    <!-- tf_broadcaster-->
+    <node name="tf_broadcaster" pkg="crone" type="tf_broadcaster" output="screen" launch-prefix="bash -c 'sleep $(arg tf_broadcaster_delay); $0 $@' "/>
+
+    <!-- tf_listener-->
+    <node name="tf_listener" pkg="crone" type="tf_listener" output="screen"  launch-prefix="bash -c 'sleep $(arg tf_listener_delay); $0 $@' "/>
+
+    <!-- map_nav-->
+    <node name="map_nav" pkg="crone" type="map_nav" output="screen"  launch-prefix="bash -c 'sleep $(arg map_nav_delay); $0 $@' "/>
+
+</launch>
