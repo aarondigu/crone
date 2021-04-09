@@ -1,0 +1,24 @@
+
+ls /dev
+
+
+roslaunch mavros px4.launch fcu_url:="/dev/ttyUSB0:921600"
+rosrun crone debug_vector
+
+roslaunch realsense2_camera rs_camera.launch filters:=pointcloud,decimation allow_no_texture_points:=true clip_distance:=5.0
+rosrun crone tf_broadcaster
+rosrun crone tf_listener
+
+
+roslaunch crone map_y_nav.launch
+
+rosrun rosserial_python serial_node.py /dev/ttyACM0
+
+
+SETUP DEL CATKIN_WS
+instalar MAVROS
+instalar Realsense en ROS
+instalar rosserial en ROS y en arduino
+
+
+
