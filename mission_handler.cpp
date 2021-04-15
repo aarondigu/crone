@@ -107,8 +107,8 @@ int main(int argc, char **argv)
     for(int i = 0; i < waypoints.size(); i++)
       {
         wp_x = waypoints[i].x_lat;
-        wp_y =  waypoints[i].y_long;
-        wp_z =  waypoints[i].z_alt;
+        wp_y = waypoints[i].y_long;
+        wp_z = waypoints[i].z_alt;
         ROS_INFO("Waypoint %d @ %f, %f, %f", i, wp_x, wp_y, wp_z);
       }
 
@@ -145,15 +145,6 @@ int main(int argc, char **argv)
     seq_wp.z = 0.0; // Sin uso
 
 
-
-
-    // Envia 100 puntos antes de iniciar
-    for(int i = 100; ros::ok() && i > 0; --i){
-        local_raw_pub.publish(pos_tar);
-        ros::spinOnce();
-        rate.sleep();
-    }
-
     while(ros::ok()){
         if( current_state.mode == "OFFBOARD" && !current_state.armed){ // Si esta en modo "OFFBOARD" pero no armado
                 if( arming_client.call(arm_cmd) && arm_cmd.response.success){ // Arma el dron
@@ -170,13 +161,16 @@ int main(int argc, char **argv)
         dis_wp = sqrtf(dis_wp); // Calcula distancia del dron al waypoint goal actual
 
 
-        if (dis_wp <= radius_acc ){ // Si el dron esta dentro del radio de aceptacion
+        if (dis_wp <= radius_acc && current_wp < waypoints.size() ){ // Si el dron esta dentro del radio de aceptacion y no ha acabado la mision
             ROS_INFO("Waypoint %d reached, out of %d", current_wp, waypoints.size() -1 ); // Imprime que ya alcanzo el waypoint
 
             if (current_wp == waypoints.size() - 1){ // Si ya alcanzo el ultimo waypoint de la mision
-                last_wp_reached = 1;
+
                 if( current_state.mode == "OFFBOARD" && set_mode_client.call(offb_set_mode) && offb_set_mode.response.mode_sent){
                 ROS_INFO("lANDING..."); // Si esta en modo "OFFBOARD", lo coloca en modo "LAND"
+                current_wp++; // Iguala current_wp a waypoints.size(), par aavisarle al pose_handler que ya alcanzo el ultimo waypoint
+                seq_wp.x = current_wp; // Actualiza la secuencia del waypoint actual
+
             }
             }
             else // Si no ha llegado el ultimo waypoint de la mision
@@ -186,13 +180,20 @@ int main(int argc, char **argv)
                 next_wp_goal.x = waypoints[current_wp].x_lat;
                 next_wp_goal.y = waypoints[current_wp].y_long;
                 next_wp_goal.z = waypoints[current_wp].z_alt;
-		seq_wp.x = current_wp; // Actualiza la secuencia del waypoint actual
+		        seq_wp.x = current_wp; // Actualiza la secuencia del waypoint actual
             }
         }
 
 
+        // Si el dron ya aterrizo
+        if (current_wp == waypoints.size() && !current_state.armed){
+            ROS_INFO("MISSION FINISHED");
+            break;
+        }
+
+
         next_wp_pub.publish(next_wp_goal); // Publica el waypoint goal actual
-	seq_wp_pub.publish(seq_wp); // Publica la secuencia del waypoint actual 
+	    seq_wp_pub.publish(seq_wp); // Publica la secuencia del waypoint actual 
 
 
         ros::spinOnce();

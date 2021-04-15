@@ -9,6 +9,7 @@
 #include <mavros_msgs/Waypoint.h>
 #include <mavros_msgs/WaypointList.h>
 #include <mavros_msgs/PositionTarget.h>
+#include <tf/transform_datatypes.h>
 #include <math.h>  
 #include <stdio.h>
 
@@ -35,14 +36,14 @@ void current_wp_cb(const geometry_msgs::Point::ConstPtr& msg){
 
 // Guarda la secuencia del waypoint goal actual
 geometry_msgs::Point wp_seq;
-void current_wp_cb(const geometry_msgs::Point::ConstPtr& msg){
+void seq_wp_cb(const geometry_msgs::Point::ConstPtr& msg){
     wp_seq = *msg;
 }
 
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "mission_handler");
+    ros::init(argc, argv, "pose_handler");
     ros::NodeHandle nh;
 
     // Suscriptor del estado del dron
@@ -82,6 +83,8 @@ int main(int argc, char **argv)
     int current_wp = 0; // El waypoint goal actual 
     float dis_wp = 0.0; // Distancia al waypoint goal actual
     float x, y, z; // Guardar la pose actual
+    float qx, qy, qz, qw; // Guardar la orientacion actual en quaternion
+    double roll, pitch, yaw; // Guardar la orientacion actual en Euler
     float radius_acc = 0.5; // Radio de aceptación para llegar a un waypoint 
     float vel_max = 3.0; // Magnitud de velocidad maxima
     float radius_freno = 2.5; // A que distancia del waypoint va a empezar a frenar en metros
@@ -129,22 +132,34 @@ int main(int argc, char **argv)
 
     // Mientras el dron no esté armado
     while(ros::ok() && !current_state.armed){
-        local_raw_pub.publish(pos_tar);
+        local_raw_pub.publish(pos_tar); // Sigue enviando puntos
         ros::spinOnce();
         rate.sleep();
     }
 
 
-    while(ros::ok() && wp.seq.y - 1 > wp_seq.x){ // Mientras no se haya alcanzado el ultimo waypoint
+    while(ros::ok() && wp_seq.y > wp_seq.x){ // Mientras no se haya alcanzado el ultimo waypoint
 	
-	// Setpoint de posicion
-	pos_tar.position.x = wp_goal.x;
-	pos_tar.position.y = wp_goal.y;
-	pos_tar.position.z = wp_goal.z;
+    	// Setpoint de posicion
+    	pos_tar.position.x = wp_goal.x;
+    	pos_tar.position.y = wp_goal.y;
+    	pos_tar.position.z = wp_goal.z;
 
+        // Posicion actual del dron
         x = current_pose.pose.position.x; // Posicion actual del dron en X
         y = current_pose.pose.position.y; // Posicion actual del dron en Y
         z = current_pose.pose.position.z; // Posicion actual del dron en Z
+
+        //Orientacion actual del dron
+        qx = current_pose.pose.orientation.x;
+        qy = current_pose.pose.orientation.y;
+        qz = current_pose.pose.orientation.z;
+        qw = current_pose.pose.orientation.w;
+        tf::Quaternion q(qx, qy, qz, qw);
+        tf::Matrix3x3 m(q);
+
+        m.getRPY(roll, pitch, yaw); // Convierte de quaternion a Euler
+        //ROS_INFO("Yaw: %f", yaw);
 
         dis_wp = pow((wp_goal.x - x),2) + pow((wp_goal.y - y),2) + pow((wp_goal.z -  z),2);
         dis_wp = sqrtf(dis_wp); // Calcula distancia del dron al waypoint goal actual
@@ -169,13 +184,17 @@ int main(int argc, char **argv)
         pos_tar.velocity.y = vec_y;
         pos_tar.velocity.z = vec_z;
 
+        // Calculando magnitud de velocidad deseada
+        // float vel = pow(vec_x,2) + pow(vec_y,2) + pow(vec_z,2);
+        // vel = sqrt(vel);
+        // ROS_INFO("Velocidad: %f", vel);
 
         // Determinando el yaw (se mide desde el eje x, alrededor de z es positivo) en ENU
-        if (wp_seq.x > 0 && wp.seq.y - 1 > wp_seq.x){ // Si no estamos en el primer  waypoint y no hemos alcanzado el ultimo
+        if (wp_seq.x > 0 && wp_seq.y > wp_seq.x){ // Si no esta en el primer  waypoint y no ha alcanzado el ultimo (cuando alcanza al ultimo wp_seq.x == wp_seq.y)
             pos_tar.yaw = atan2(wp_goal.y - y, wp_goal.x - x);
         }
         else { // Si estamos en el primer wp o ya alcanzamos el ultimo
-            pos_tar.yaw = 0.0;
+            pos_tar.yaw = yaw; // Mantener yaw
         }
 
 
